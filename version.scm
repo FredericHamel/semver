@@ -1,71 +1,131 @@
 
 (define-library (version)
-  (export (rename make-version make)
+  (export (rename parse-version parse)
+          (rename make-version make)
           (rename version-major major)
           (rename version-minor minor)
           (rename version-patch patch)
           (rename version-revision revision))
-  
+
   (import (gambit))
 
   (begin
-    (define-type (version-type)
+    (define-type version-type
       constructor: make-version
       major minor patch revision)
 
+
+    (define minimum-version-length 6)
+
+    (define (is-between c c1 c2)
+      (and (char>=? c c1)
+           (char<=? c c2)))
+
+    (define (is-digit c)
+      (is-between c #\0 #\9))
+
+    (define (is-positive-digit c)
+      (is-between c #\1 #\9))
+
     ;; Iterator
     (define (parse-version version-str)
-      (call-with-input-string
-        version-str
-        (lambda (p)
-          (define (major)
-            (let ((v-maj (read-line p #\.)))
-              (and
-                (> (string-length v-maj) 1)
-                (char=? (string-ref v-maj 0) #\v)
-                (minor v-maj))))
+      (let ((version-str-len (string-length version-str)))
+        (define (major start)
+          (if (and (char=? (string-ref version-str start) #\0)
+                   (char=? (string-ref version-str (+ start 1)) #\.))
+            (minor (+ start 2) 0)
+            (if (is-positive-digit (string-ref version-str start))
+              (let loop ((end (+ start 1)))
+                (if (>= end version-str-len)
+                  (error "Invalid version format")
+                  (let ((c (string-ref version-str end)))
+                    (cond
+                      ((char=? c #\.)
+                       (if (> end start)
+                         (minor
+                           (+ end 1)
+                           (##string->number
+                             (##substring version-str start end)))
+                         (error "Not a valid version number")))
+                      ((is-digit c)
+                       (loop (+ end 1)))
+                      (else
+                        (error "Major version must be a number"))))))
+              (error "Not a positive integer"))))
 
-          (define (minor v-maj)
-            (let ((v-min (read-line p #\.)))
-              (if (eof-object? v-min)
-                (make-version v-maj 0 0 '())
-                (and
-                  (number? v-min)
-                  (patch v-maj (##string->number v-min))))))
+        (define (minor start v-maj)
+          (let loop ((end (+ start 1)))
+            (if (>= end version-str-len)
+              (error "Invalid version format")
+              (let ((c (string-ref version-str end)))
+                (cond
+                  ((char=? c #\.)
+                   (if (> end start)
+                     (patch  (+ end 1)
+                             v-maj
+                             (##string->number
+                              (##substring version-str start end)))
+                     (error "Not a valid version number")))
+                  ((is-digit c)
+                   (loop (+ end 1)))
+                  (else
+                    (error "Minor version must be a number")))))))
 
-          (define (patch v-maj v-min)
-            (let ((v-patch (read-line p #\-)))
-              (if (eof-object? v-patch)
-                (make-version v-maj v-min #f '())
-                (and
-                  (number? v-patch)
-                  (revision v-maj v-min (string->number v-patch))))))
+        (define (patch start v-maj v-min)
+          (let loop ((end (+ start 1)))
+            (if (>= end version-str-len)
+              (if (> end start)
+                (make-version v-maj v-min
+                              (##string->number
+                               (##substring version-str start end)) '())
+                (error "Invalid version format"))
+              (let ((c (string-ref version-str end)))
+                (cond
+                  ((char=? c #\-)
+                   (if (> end start)
+                     (revision (+ end 1) v-maj v-min
+                               (##string->number
+                                (##substring version-str start end)))
+                     (error "Not a valid version number")))
+                  ((is-digit c)
+                   (loop (+ end 1)))
+                  (else
+                    (error "Patch version must be a number")))))))
 
-          (define (revision v-maj v-min v-patch)
-            (let ((v-rev (read-all
-                           p
-                           (lambda (r)
-                             (read-line r #\.)))))
-              (make-version v-maj v-min v-patch v-rev)))
-          
-          (major))))
-  
-    (define (version-string>? str1 str2)
-      (let ((len-str1 (length str1))
-            (len-str2 (length str2)))
-        (cond
-          ((= len-str1 len-str2)
-           (string-ci>? str1 str2))
-          ((> len-str1 len-str2)
-           (let loop ((i 0))
-             (and
-               (< i len-str1)
-               (char>? (string-ref str1 i)
-                       (string-ref str2 i))
-               (loop (+ i 1)))))
-          (if 
+        (define (revision start v-maj v-min v-patch)
+          (let loop ((beg start)
+                     (pos start)
+                     (v-rev '()))
+            ; Reach end of string.
+            (if (>= pos version-str-len)
+              (cond
+                ((> pos beg)
+                 (make-version v-maj v-min v-patch
+                               ; Revision part of semantic versioning
+                               (reverse
+                               (##cons (##substring version-str beg pos)
+                                v-rev))))
+                (else
+                 (error "Invalid revision")))
+              (let ((c (string-ref version-str pos)))
+                (cond
+                  ((char=? c #\.)
+                   (let ((newbeg (+ pos 1)))
+                     (loop newbeg
+                           newbeg
+                           (##cons
+                            (if (> pos beg)
+                              (##substring
+                               version-str beg pos)
+                              (error "Empty revision section"))
+                            v-rev))))
+                  (else
+                    (loop beg (+ pos 1) v-rev)))))))
 
-    (define (version>? ver1 ver2)
+        (if (< version-str-len minimum-version-length)
+          (error "Invalid version format")
+          (and (char=? (string-ref version-str 0) #\v)
+               (major 1)))))))
 
 
 
