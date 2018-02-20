@@ -5,17 +5,23 @@
           (rename version-major major)
           (rename version-minor minor)
           (rename version-patch patch)
-          (rename version-revision revision))
+          (rename version-revision revision)
+
+          ; Predicate
+          version>?)
 
   (import (gambit))
 
   (begin
     (define-type version-type
       constructor: make-version
-      major minor patch revision)
+      (major version-major)
+      (minor version-minor)
+      (patch version-patch)
+      (revision version-revision))
 
 
-    (define minimum-version-length 6)
+    (define minimum-version-length 5)
 
     (define (is-between c c1 c2)
       (and (char>=? c c1)
@@ -124,8 +130,22 @@
 
         (if (< version-str-len minimum-version-length)
           (error "Invalid version format")
-          (and (char=? (string-ref version-str 0) #\v)
-               (major 1)))))))
+
+          ;; Allow both vX.y.z and X.y.z
+          (major (if (char=? (string-ref version-str 0) #\v) 1 0)))))
+
+    (define (version>? ver1 ver2)
+      (and (=
+             (version-major ver1)
+             (version-major ver2))
+           (or
+             (> (version-minor ver1)
+                (version-minor ver2))
+             (and
+               (= (version-minor ver1)
+                  (version-minor ver2))
+               (> (version-patch ver1)
+                  (version-patch ver2))))))))
 
 
 
