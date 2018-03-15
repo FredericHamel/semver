@@ -7,6 +7,9 @@
           (rename version-patch patch)
           (rename version-revision revision)
 
+          ;; Conversion
+          version->string
+
           ; Predicate
           version>?)
 
@@ -145,6 +148,14 @@
           ;; Allow both vX.y.z and X.y.z
           (major (if (char=? (string-ref version-str 0) #\v) 1 0))
           (error "Invalid version minimum length"))))
+
+    (define (version->string ver)
+      (string-append
+        (number->string (version-major ver))
+        "."
+        (number->string (version-minor ver))
+        "."
+        (number->string (version-patch ver))))
 
     (define (version>? ver1 ver2)
       (and (=
