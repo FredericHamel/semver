@@ -166,12 +166,20 @@
 
     ;;; TODO: include the revision in the following function.
     (define (version->string ver)
-      (string-append
-        (number->string (macro-version-major ver))
-        "."
-        (number->string (macro-version-minor ver))
-        "."
-        (number->string (macro-version-patch ver))))
+      (let ((base-version (string-append
+                            (number->string (macro-version-major ver))
+                            "."
+                            (number->string (macro-version-minor ver))
+                            "."
+                            (number->string (macro-version-patch ver)))))
+        (if (pair? (macro-version-revision ver))
+          (let loop ((v-rev (cdr (macro-version-revision ver)))
+                     (str (string-append base-version
+                                         "-"
+                                         (car (macro-version-revision ver)))))
+            (if (pair? v-rev)
+              (loop (cdr v-rev) (string-append str "." (car v-rev)))
+              str)))))
 
     (define (version=? ver1 ver2)
       (and
@@ -183,7 +191,10 @@
           (macro-version-minor ver2))
         (=
           (macro-version-patch ver1)
-          (macro-version-patch ver2))))
+          (macro-version-patch ver2))
+        (equal?
+          (macro-version-revision ver1)
+          (macro-version-revision ver2))))
 
     (define (version<? ver1 ver2)
       (or (<

@@ -88,7 +88,10 @@
 
 (define v1-2-0 (parse-version "1.2.0"))
 (define v1-2-1 (parse-version "1.2.1"))
+
 (define v1-2-2 (parse-version "1.2.2"))
+(define v1-2-2-bootstrap (parse-version "1.2.2-bootstrap"))
+(define v1-2-2-bootstrap-v1 (parse-version "1.2.2-bootstrap.v1"))
 
 (define v2-0-0 (parse-version "2.0.0"))
 
@@ -116,6 +119,13 @@
 (macro-expect-true? (version=? v1-2-0 v1-2-0))
 (macro-expect-true? (version=? v1-2-1 v1-2-1))
 (macro-expect-true? (version=? v1-2-2 v1-2-2))
+
+(macro-expect-false? (version=? v1-2-2 v1-2-2-bootstrap))
+(macro-expect-false? (version=? v1-2-2 v1-2-2-bootstrap-v1))
+
+(macro-expect-true? (version=? v1-2-2-bootstrap v1-2-2-bootstrap))
+(macro-expect-false? (version=? v1-2-2-bootstrap v1-2-2-bootstrap-v1))
+(macro-expect-true? (version=? v1-2-2-bootstrap-v1 v1-2-2-bootstrap-v1))
 
 (macro-expect-true? (version=? v2-0-0 v2-0-0))
 
