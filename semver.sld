@@ -26,6 +26,7 @@
       opaque:
       ;unprintable:
 
+      (prefix? unprintable:)
       major
       minor
       patch
@@ -35,7 +36,7 @@
 
     ;; Wrapper function
     (define (make-version major minor patch revision)
-      (macro-make-version major minor patch revision))
+      (macro-make-version #f major minor patch revision))
 
     (define (version-major ver)
       (macro-version-major ver))
@@ -67,11 +68,11 @@
 
       (let ((str-len (string-length str)))
 
-        (define (major start)
+        (define (major prefix? start)
           (if (char=? (string-ref str start) #\0)
 
             (and (char=? (string-ref str (+ start 1)) #\.)
-                 (minor (+ start 2) 0))
+                 (minor prefix? (+ start 2) 0))
 
             (and
               (is-positive-digit (string-ref str start))
@@ -79,8 +80,9 @@
                 (and (< end str-len)
 
                      (let ((c (string-ref str end)))
-                       (if (char=? c #\.)
+                     (if (char=? c #\.)
                           (minor
+                            prefix?
                             (+ end 1)
                             (##string->number
                              (##substring str start end)))
@@ -88,13 +90,13 @@
                          (and (is-digit c)
                           (loop (+ end 1))))))))))
 
-        (define (minor start v-maj)
+        (define (minor prefix? start v-maj)
           (and
             (< (+ start 2) str-len)
 
             (if (char=? (string-ref str start) #\0)
               (and (char=? (string-ref str (+ start 1)) #\.)
-                   (patch (+ start 2) v-maj 0))
+                   (patch prefix? (+ start 2) v-maj 0))
 
               (let loop ((end start))
                 (and
@@ -102,7 +104,7 @@
                   (let ((c (string-ref str end)))
                     (if (char=? c #\.)
                       (and (> end start)
-                           (patch (+ end 1)
+                           (patch prefix? (+ end 1)
                                   v-maj
                                   (##string->number
                                    (##substring str start end))))
@@ -110,43 +112,45 @@
                       (and (is-digit c)
                            (loop (+ end 1))))))))))
 
-        (define (patch start v-maj v-min)
+        (define (patch prefix? start v-maj v-min)
 
           (if (char=? (string-ref str start) #\0)
             (if (= 1 (- str-len start)) ; Finish with 0.
-              (macro-make-version v-maj v-min 0 '())
+              (macro-make-version prefix? v-maj v-min 0 '())
               (and
                 (char=? (string-ref str (+ start 1)) #\-)
-                (revision (+ start 2) v-maj v-min 0)))
+                (revision prefix? (+ start 2) v-maj v-min 0)))
 
             (let loop ((end start))
               (if (< end str-len)
                 (let ((c (string-ref str end)))
                   (if (char=? c #\-)
-                      (revision (+ end 1) v-maj v-min
+                      (revision prefix? (+ end 1) v-maj v-min
                                 (##string->number
                                  (##substring str start end)))
                       (and (is-digit c)
                            (loop (+ end 1)))))
 
-                (macro-make-version v-maj v-min
+                (macro-make-version prefix? v-maj v-min
                                     (##string->number
                                      (##substring str start end)) '())))))
 
-        (define (revision start v-maj v-min v-patch)
+        (define (revision prefix? start v-maj v-min v-patch)
           (and (< start str-len)
                (let loop ((beg start)
                           (pos start)
                           (v-rev '()))
                  ; Reach end of string.
                  (if (>= pos str-len)
-                   (make-version v-maj v-min v-patch
-                                 ; Revision part of semantic versioning
-                                 (if (> pos beg)
-                                   (reverse
-                                     (##cons (##substring str beg pos)
-                                      v-rev))
-                                   v-rev))
+                   (macro-make-version
+                     prefix?
+                     v-maj v-min v-patch
+                     ; Revision part of semantic versioning
+                     (if (> pos beg)
+                       (reverse
+                         (##cons (##substring str beg pos)
+                          v-rev))
+                       v-rev))
                    (let ((c (string-ref str pos)))
                      (if (char=? c #\.)
                        (let ((newbeg (+ pos 1)))
@@ -162,7 +166,8 @@
 
         (and (>= str-len minimum-version-length)
           ;; Allow both vX.y.z and X.y.z
-          (major (if (char=? (string-ref str 0) #\v) 1 0)))))
+          (let ((prefix? (char=? (string-ref str 0) #\v)))
+            (major prefix? (if prefix? 1 0))))))
 
     ;;; TODO: include the revision in the following function.
     (define (version->string ver)
@@ -172,14 +177,20 @@
                             (number->string (macro-version-minor ver))
                             "."
                             (number->string (macro-version-patch ver)))))
-        (if (pair? (macro-version-revision ver))
-          (let loop ((v-rev (cdr (macro-version-revision ver)))
-                     (str (string-append base-version
-                                         "-"
-                                         (car (macro-version-revision ver)))))
-            (if (pair? v-rev)
-              (loop (cdr v-rev) (string-append str "." (car v-rev)))
-              str)))))
+        (let ((result
+                (if (pair? (macro-version-revision ver))
+                  (let loop ((v-rev (cdr (macro-version-revision ver)))
+                             (str (string-append base-version
+                                                 "-"
+                                                 (car (macro-version-revision ver)))))
+                    (if (pair? v-rev)
+                      (loop (cdr v-rev) (string-append str "." (car v-rev)))
+                      str))
+                  base-version)))
+          (if (macro-version-prefix? ver)
+            (string-append "v" result)
+            result))))
+
 
     (define (version=? ver1 ver2)
       (and
